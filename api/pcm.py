@@ -18,6 +18,7 @@ def run_possibilistic_c_means(image_bytes, cluster_count, max_iter, fuzziness, s
     validate_cluster_count(pixel_samples.shape[0], cluster_count)
 
     centers, fuzzy_membership = compute_fuzzy_c_means(pixel_samples, cluster_count, max_iter, fuzziness, seed)
+    fuzzy_labels = fuzzy_membership.argmax(axis=1)
     cluster_scales = compute_cluster_scales(pixel_samples, centers, fuzzy_membership, fuzziness)
     typicality = update_typicality(pixel_samples, centers, cluster_scales, fuzziness)
 
@@ -30,6 +31,9 @@ def run_possibilistic_c_means(image_bytes, cluster_count, max_iter, fuzziness, s
             break
 
     labels = typicality.argmax(axis=1)
+
+    if should_use_fuzzy_fallback(labels, fuzzy_labels, cluster_count):
+        labels = fuzzy_labels
 
     return create_clustering_payload(
         "pcm",
@@ -66,3 +70,10 @@ def has_converged(current_typicality, previous_typicality):
     max_change = np.max(np.abs(current_typicality - previous_typicality))
 
     return max_change < 1e-5
+
+
+def should_use_fuzzy_fallback(labels, fuzzy_labels, cluster_count):
+    if np.unique(labels).size > 1:
+        return False
+
+    return np.unique(fuzzy_labels).size > 1 and cluster_count > 1
